@@ -47,3 +47,24 @@
     #    if element[0][1]<sorted_areas[i][0][1]-sorted_areas[i][1][1]
 
 #filtred_rect = rect_filter(rotated_rect)
+split_lines = create_split_line(rotated_rect)
+
+def create_split_line(rect):
+    split_lines = []
+    for i, element in enumerate(rect):
+        centr_point = (int(element[0][0]),int(element[0][1]))
+        height = element[1][0]
+        a = math.radians(element[2]+90) 
+        l = 0.3 * height
+        dx = math.cos(a)*l
+        dy = math.sin(a)*l
+
+        point_split_1 = (int(centr_point[0] + dx), int(centr_point[1] + dy))
+        point_split_2 = (int(centr_point[0] - dx), int(centr_point[1] - dy))
+        #CREATE LIST !!!    
+        cv.line(image, point_split_1, point_split_2, (0,255,0))
+
+         
+        add = [point_split_1,point_split_2,a]  
+        split_lines.append(add)
+    return tuple(split_lines)     
