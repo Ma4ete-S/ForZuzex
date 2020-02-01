@@ -68,3 +68,39 @@ def create_split_line(rect):
         add = [point_split_1,point_split_2,a]  
         split_lines.append(add)
     return tuple(split_lines)     
+
+    if len(clusters_area)>1:
+        for i in len(clusters_area)-1:
+            if  len(clusters_area[i])>len(clusters_area[i+1]):
+                length = len(clusters_area[i+1])
+            else:
+                length = len(clusters_area[i])
+
+
+box4 = []
+for i, contour in enumerate(rotated_rect):
+    box4.append(cv.boxPoints(rotated_rect[i]))
+    box4[i] = np.int0(box4[i])
+
+
+for i, contour in enumerate(box4):    
+    cv.drawContours(image,[contour],0,(255,0,0),1)
+
+
+
+
+#def filter_in_clasters(clusters_area):    
+#    for i, cluster in enumerate(clusters_area):
+#
+#        for j in range(len(cluster)):
+#            dx = cluster[j-1][0][0] - cluster[j][0][0]
+#            dy = cluster[j-1][0][1] - cluster[j[0][1]
+
+#    return clusters_area
+#
+
+
+
+
+
+

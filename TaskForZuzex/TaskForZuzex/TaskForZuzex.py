@@ -14,17 +14,21 @@ def get_image(path):
 
 def filter_rect(rect):
     if rect[1][0] != 0 and rect[1][1] != 0:
-        if rect[1][0]/rect[1][1]>5 or rect[1][1]/rect[1][0]>5:
+        if rect[1][0]/rect[1][1]>3 or rect[1][1]/rect[1][0]>3:
+            round_rect = [0,1,2]
+            round_rect[0] = round(rect[0][0]) , round(rect[0][1])
+            round_rect[1] = round(rect[1][0]) , round(rect[1][1])
+            round_rect[2] = round(rect[2])
+
             if rect[1][1]>rect[1][0]:
-                revers_rect = [0,1,2]
-                revers_rect[0] = rect[0]
-                revers_rect[1] = list(rect[1])
-                revers_rect[1][0], revers_rect[1][1] = revers_rect[1][1], revers_rect[1][0]
-                revers_rect[1] = tuple(revers_rect[1])
-                revers_rect[2] = rect[2] + 90
-                return tuple(revers_rect)
-            else:   
-                return rect
+                round_rect[1] = list(round_rect[1])
+                round_rect[1][0] ,round_rect[1][1] = round_rect[1][1], round_rect[1][0]
+                round_rect[1] = tuple(round_rect[1])
+                round_rect[2] = round_rect[2] + 90
+
+
+            return tuple(round_rect)
+    return None
 
 def create_rotated_rect(image):
     height = np.size(image,0) 
@@ -43,7 +47,10 @@ def create_rotated_rect(image):
     rotated_rect = []
     for i, contour in enumerate(hulls):
         rect = filter_rect(cv.minAreaRect(contour))
-        if rect != None: 
+
+        if rect != None and (len(rotated_rect) == 0 or rotated_rect[-1] != rect) : 
+
+            
             rotated_rect.append(rect)
 
     return tuple(rotated_rect)
@@ -61,7 +68,7 @@ def view_image(image):
 
 
 def improve_image(image_gray):
-    kernel = np.array([[-0.6,-0.6,-0.6],[-0.6,5.3,-0.6],[-0.6,-0.6,-0.6]])
+    kernel = np.array([[-0.6,-0.6,-0.6],[-0.6,5.4,-0.6],[-0.6,-0.6,-0.6]])
     image_gray = cv.filter2D(image_gray,-1,kernel)
     hist,bins = np.histogram(image_gray,256)
     cdf = hist.cumsum()
@@ -76,7 +83,7 @@ def create_cluster(rotated_rect):
     i = 0
     amount_in_cluster = [0 for clasters in range(36)]
 
-    while count_cluster < 18 and i < len(sorted_areas):
+    while count_cluster < 19 and i < len(sorted_areas):
         if count_cluster * 5 - 5 <= sorted_areas[i][2] < count_cluster * 5 :
             amount_in_cluster[count_cluster+17] += 1
             i += 1
@@ -85,24 +92,55 @@ def create_cluster(rotated_rect):
    
     clusters_area = []
     summ_in_out = -amount_in_cluster[-1]
-    for i in range(36):
-        if amount_in_cluster[i-1] + amount_in_cluster[i] > 10:
+    for i in range(35):
+        summ = amount_in_cluster[i-1] + amount_in_cluster[i] + amount_in_cluster[i+1]
+        if amount_in_cluster[i-1] < amount_in_cluster[i] > amount_in_cluster[i+1] and summ > 10:
             cluster = []
-            for j in range(amount_in_cluster[i-1] + amount_in_cluster[i]):
+            for j in range(summ):
                 cluster.append(sorted_areas[summ_in_out + j])
             clusters_area.append(cluster)
         summ_in_out += amount_in_cluster[i-1]
+    
+    summ = amount_in_cluster[-2] + amount_in_cluster[-1] + amount_in_cluster[0]
+    
+    if amount_in_cluster[-2] < amount_in_cluster[-1] > amount_in_cluster[0] and summ > 10:
+        cluster = []
+        for j in range(summ):
+            cluster.append(sorted_areas[summ_in_out + j])
+        clusters_area.append(cluster)
+
+    
 
     if clusters_area == None:
         print_error("Image have not consist any barcode.")
 
-    # ПРОВЕРКА КЛАСТЕРОВ НА СОВПАДЕНИЕ
+
 
     return clusters_area
             
+def select_barcode(clusters_area):
+    for i, cluster in enumerate(clusters_area):
+        base_x = cluster[i][0][0]
+        base_y = cluster[i][0][1]
+        base_alfa = math.radians(cluster[i][2])
+        for j in range(len(cluster)):
+            dx = cluster[j][0][0] - base_x
+            dy = cluster[j][0][1] - base_y
+            distance = (dx**2 + dy**2)**0.5
+            #summ_quarter_width = (cluster[j-1][1][1] + cluster[j][1][1])/4
+            d_alfa = math.tan(dy/dx)
+            height = math.cos()
 
 
-path = 'C:/Photo/2.bmp'
+            #if distance > summ_half_width and distance < summ_half_width:
+
+
+
+    return barcode_area
+
+
+
+path = 'C:/Photo/9.png'
 
 
 image = get_image(path)
@@ -111,8 +149,13 @@ image_gray = improve_image(image_gray)
 rotated_rect = create_rotated_rect(image_gray)
 clusters_area = create_cluster(rotated_rect)
 
-print(len(clusters_area[0]))
-print(len(clusters_area[1]))
+
+print(len(clusters_area))
+
+for i in range(len(clusters_area)):
+    print(i,"__",len(clusters_area[i]))
+
+
 
 
 
@@ -120,21 +163,20 @@ box = []
 for i, contour in enumerate(clusters_area[0]):
     box.append(cv.boxPoints(clusters_area[0][i]))
     box[i] = np.int0(box[i])
-    print(clusters_area[0][i][2])
 
 for i, contour in enumerate(box):    
-    cv.drawContours(image,[contour],0,(255,0,255),1)
-view_image(image)
+    cv.drawContours(image,[contour],0,(0,0,255),1)
 
-print('------------------------------')
 
 box2 = []
 for i, contour in enumerate(clusters_area[1]):
     box2.append(cv.boxPoints(clusters_area[1][i]))
     box2[i] = np.int0(box2[i])
-    print(clusters_area[1][i][2])
 
 for i, contour in enumerate(box2):    
-    cv.drawContours(image,[contour],0,(0,0,255),1)
+    cv.drawContours(image,[contour],0,(255,0,0),1)
+
+
+
 
 view_image(image)
