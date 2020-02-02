@@ -104,3 +104,21 @@ for i, contour in enumerate(box4):
 
 
 
+            #summ_quarter_width = (cluster[j-1][1][1] + cluster[j][1][1])/4
+            #if distance > summ_half_width and distance < summ_half_width:
+def find_min_area_rect(rect_areas,start):
+    rect = cluster_sorted_by_distance[start]
+    while distance_between_centr < min_distance or start < len(cluster_sorted_by_distance)-1:
+        start += 1
+        stop = start
+        dx = cluster_sorted_by_distance[start+1][0][0] - cluster_sorted_by_distance[start][0][0]
+        dy = cluster_sorted_by_distance[start+1][0][1] - cluster_sorted_by_distance[start][0][1]
+        distance_between_centr = (dx**2 + dy**2) **0.5
+        min_distance = (cluster_sorted_by_distance[start+1][1][1] + cluster_sorted_by_distance[start][1][1])/4
+        rect.append(cluster_sorted_by_distance[start])
+
+    max(rect,key = lambda tup:tup[2])
+    sorted(rotated_rect, key = lambda tup:tup[2])
+    return min_area_rect, stop
+
+min_area_rect, j = find_min_area_rect(cluster_sorted_by_distance,start)

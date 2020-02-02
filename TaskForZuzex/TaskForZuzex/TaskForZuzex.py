@@ -49,8 +49,6 @@ def create_rotated_rect(image):
         rect = filter_rect(cv.minAreaRect(contour))
 
         if rect != None and (len(rotated_rect) == 0 or rotated_rect[-1] != rect) : 
-
-            
             rotated_rect.append(rect)
 
     return tuple(rotated_rect)
@@ -119,24 +117,103 @@ def create_cluster(rotated_rect):
     return clusters_area
             
 def select_barcode(clusters_area):
+    barcode_area = []
     for i, cluster in enumerate(clusters_area):
-        base_x = cluster[i][0][0]
-        base_y = cluster[i][0][1]
-        base_alfa = math.radians(cluster[i][2])
+        base_x = 0
+        base_y = 0
+        base_angle = 0 
         for j in range(len(cluster)):
-            dx = cluster[j][0][0] - base_x
-            dy = cluster[j][0][1] - base_y
-            distance = (dx**2 + dy**2)**0.5
-            #summ_quarter_width = (cluster[j-1][1][1] + cluster[j][1][1])/4
-            d_alfa = math.tan(dy/dx)
-            height = math.cos()
+            base_angle += cluster[j][2]
+        base_angle = math.radians(base_angle / len(cluster))
+        k1 = 1/math.tan(base_angle)
+        k2 = 1/math.tan(base_angle+math.radians(90))
+        distance = []
+
+        for j in range(len(cluster)):
+            dx = (cluster[j][0][1] - k2 *cluster[i][0][0])/(k1-k2)
+            dy = k1 * dx
+            distance.append(((dx-cluster[j][0][0])**2 + (dy-cluster[j][0][1])**2)**0.5)
+
+        cluster_sorted_by_distance = [y for x,y in sorted(zip(distance, cluster))]
+        distance = sorted(distance)
+
+        candidate_in_barcode = []
+        for j in range(len(cluster_sorted_by_distance)-1):
+            distance_between_element_in_plane = distance[j+1] - distance[j]
+            dx = cluster_sorted_by_distance[j+1][0][0] - cluster_sorted_by_distance[j][0][0]
+            dy = cluster_sorted_by_distance[j+1][0][1] - cluster_sorted_by_distance[j][0][1]
+            distance_between_centr = (dx**2 + dy**2) **0.5
+            max_distance = cluster_sorted_by_distance[j][1][0] * 0.5
+            min_distance = (cluster_sorted_by_distance[j+1][1][1] + cluster_sorted_by_distance[j][1][1])/4
+
+            if distance_between_element_in_plane < max_distance and distance_between_centr < max_distance:
+                if distance_between_centr < min_distance:
+                    min_area_rect, j = connect_crossed_areas(cluster_sorted_by_distance, start = j)
+                    candidate_in_barcode.append(min_area_rect)
+                elif candidate_in_barcode==None: 
+                    candidate_in_barcode.append(cluster_sorted_by_distance[j])
+                else: 
+                    candidate_in_barcode.append(cluster_sorted_by_distance[j+1])
+ 
+        if len(candidate_in_barcode) > 5:
+            for j in range(len(candidate_in_barcode)):
+                contour = find_minAreaRect_from_rect(candidate_in_barcode)
+
+                box = []
+                box.append(cv.boxPoints(contour))
+                box = np.int0(box)
+                cv.drawContours(image,[box],0,(255,0,0),1)
+            barcode_area.append(contour)
 
 
-            #if distance > summ_half_width and distance < summ_half_width:
 
 
+        point_split_1 = (base_x,base_y)
 
+    
     return barcode_area
+
+def connect_crossed_areas(rect_areas,start):
+    rect = []
+    rect.append(rect_areas[start])
+    distance_between_centr = 0
+    min_distance = 1
+    while distance_between_centr < min_distance and start < len(rect_areas)-1:
+        start += 1
+        stop = start
+        dx = rect_areas[start+1][0][0] - rect_areas[start][0][0]
+        dy = rect_areas[start+1][0][1] - rect_areas[start][0][1]
+        distance_between_centr = (dx**2 + dy**2) **0.5
+        min_distance = (rect_areas[start+1][1][1] + rect_areas[start][1][1])/4
+        rect.append(rect_areas[stop])
+    new_area_rect = find_minAreaRect_from_rect(rect)
+
+    return new_area_rect, stop
+
+
+def find_minAreaRect_from_rect(rect):
+    points = []
+    for i,element in enumerate(rect):
+        base_x = element[0][0]
+        base_y = element[0][1]
+        base_angle = math.radians(element[2])
+        lenght = ((base_x - element[1][0])**2 + (base_y - element[1][1])**2) **0.5
+        d_shift1 = round(math.sin(math.radians(base_angle))*lenght)
+        d_shift2 = round(math.cos(math.radians(base_angle))*lenght)
+
+        point = base_x + d_shift1, base_y + d_shift2
+        points.append(point)
+        point = base_x - d_shift1, base_y - d_shift2
+        points.append(point)
+        point = base_x + d_shift1, base_y - d_shift2
+        points.append(point)
+        point = base_x - d_shift1, base_y + d_shift2 
+        points.append(point)
+
+    return cv.minAreaRect(np.float32(points))
+
+
+
 
 
 
@@ -148,35 +225,37 @@ image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 image_gray = improve_image(image_gray)
 rotated_rect = create_rotated_rect(image_gray)
 clusters_area = create_cluster(rotated_rect)
-
-
-print(len(clusters_area))
-
-for i in range(len(clusters_area)):
-    print(i,"__",len(clusters_area[i]))
-
-
-
-
-
-box = []
-for i, contour in enumerate(clusters_area[0]):
-    box.append(cv.boxPoints(clusters_area[0][i]))
-    box[i] = np.int0(box[i])
-
-for i, contour in enumerate(box):    
-    cv.drawContours(image,[contour],0,(0,0,255),1)
-
-
-box2 = []
-for i, contour in enumerate(clusters_area[1]):
-    box2.append(cv.boxPoints(clusters_area[1][i]))
-    box2[i] = np.int0(box2[i])
-
-for i, contour in enumerate(box2):    
-    cv.drawContours(image,[contour],0,(255,0,0),1)
-
-
-
+select_barcode(clusters_area)
 
 view_image(image)
+
+#print(len(clusters_area))
+
+#for i in range(len(clusters_area)):
+ #   print(i,"__",len(clusters_area[i]))
+
+
+
+
+
+#box = []
+#for i, contour in enumerate(clusters_area[0]):
+#    box.append(cv.boxPoints(clusters_area[0][i]))
+#    box[i] = np.int0(box[i])
+
+#for i, contour in enumerate(box):    
+#    cv.drawContours(image,[contour],0,(0,0,255),1)
+
+
+#box2 = []
+#for i, contour in enumerate(clusters_area[1]):
+#    box2.append(cv.boxPoints(clusters_area[1][i]))
+#    box2[i] = np.int0(box2[i])
+
+#for i, contour in enumerate(box2):    
+#    cv.drawContours(image,[contour],0,(255,0,0),1)
+
+
+
+
+
