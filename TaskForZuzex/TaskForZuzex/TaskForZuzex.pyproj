@@ -21,7 +21,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Trash.py">
+    <Compile Include="ClassSearcherBarcode.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="TaskForZuzex.py" />
