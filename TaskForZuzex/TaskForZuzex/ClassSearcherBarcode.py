@@ -4,6 +4,8 @@ import os
 import timeit
 import sys
 
+
+
 import cv2 as cv
 
 class SearcherBarcode:
@@ -12,10 +14,10 @@ class SearcherBarcode:
 
     The designer accepts:
     Image - Required
-    MSER parameter value - optional parameter, default value delta_MSER = 5
-    Run-time print flag - optional parameter, default flag_print_runtime = False,
+    Run-time print flag - optional parameter, default flag_print_runtime = 0,
     When set to flag_print_runtime = True, the system displays a report on the runtime of the modules.
-
+    MSER parameter value - optional parameter, default value delta_MSER = 5
+    
     Open method:
     get_barcode_area () - The method returns the oriented rectangle of the bounding barcode.
 
@@ -25,16 +27,16 @@ class SearcherBarcode:
 
     _aspect_ratio_for_filtering = 3
     _delta_max_distance_to_unite = 0.5
-    _mount_areas_for_became_barcode = 8
+    _mount_rect_for_became_barcode = 8
     _general_runtime = 0
     _start_run = 0
 
-    def __init__(self, image, flag_print_runtime=False, delta_MSER=5):
+    def __init__(self, image, flag_print_runtime=0, delta_MSER=5):
         self.image = image
         self.delta_MSER = delta_MSER
         self.flag_print_runtime = flag_print_runtime
         self.barcode_area = None
-
+        
     
     def get_barcode_area(self):
         """  
@@ -64,15 +66,14 @@ class SearcherBarcode:
             if self.flag_print_runtime: 
                 print("Block detection runtime: {} c".format(self._get_runtime()))
 
-            clusters_area = self._create_clusters(rotated_rect)
+            clusters_rect = self._create_clusters(rotated_rect)
             if self.flag_print_runtime: 
                 print("Clustering runtime: {} c".format(self._get_runtime()))
 
-            self.barcode_area = self._select_barcode(clusters_area)
+            self.barcode_area = self._select_barcode(clusters_rect)
             if self.flag_print_runtime: 
                 print("Selecting area barcode runtime: {} c".format(self._get_runtime()))
                 print("Total runtime: {} c".format(round(self._general_runtime, 2)))
-
         except:
             return None
 
@@ -86,14 +87,6 @@ class SearcherBarcode:
         prepared_image = cv.cvtColor(self.image, cv.COLOR_BGR2GRAY)
         kernel = np.array([[-0.5,-0.5,-0.5],[-0.5,4.8,-0.5],[-0.5,-0.5,-0.5]])
         prepared_image = cv.filter2D(prepared_image,-1,kernel)
-
-        #hist,bins = np.histogram(prepared_image,256)
-        #cdf = hist.cumsum()
-        #cdf = (cdf-cdf[0])*255/(cdf[-1]-1)
-        #cdf = cdf.astype(np.uint8)
-        #prepared_image = cdf[prepared_image]
-        
-        #prepared_image = cv.medianBlur(prepared_image,5)
         return prepared_image
 
 
@@ -108,7 +101,7 @@ class SearcherBarcode:
         conturs = self._find_conturs_with_MSER_(prepared_image)
         if len(conturs) > 10:
             rotated_rect = self._get_rotated_rect_from_conturs_(conturs)
-            rotated_rect = self._connect_crossed_areas__(rotated_rect)
+            rotated_rect = self._connect_crossed_rect__(rotated_rect)
         return rotated_rect
 
     def _find_conturs_with_MSER_(self, image):
@@ -125,7 +118,8 @@ class SearcherBarcode:
     def _get_rotated_rect_from_conturs_(self, contours):
         rotated_rect = []
         for i, contour in enumerate(contours):
-            rect = self._filter_rect__(cv.minAreaRect(contour))
+            rect = cv.minAreaRect(contour)
+            rect = self._filter_rect__(rect) # If rect failed ckech, return  None
             if rect is not None:
                 if len(rotated_rect)==0: 
                     rotated_rect.append(rect)
@@ -168,7 +162,7 @@ class SearcherBarcode:
         return tuple(prepared_rect)
     
 
-    def _connect_crossed_areas__(self, rect_areas):
+    def _connect_crossed_rect__(self, rect_areas):
         """
         The function takes a list of oriented rectangle parameters and
         Combines intersecting regions.
@@ -185,7 +179,7 @@ class SearcherBarcode:
             distance_between_centr = (dx**2 + dy**2) **0.5
             min_distance = (rect_areas[i+1][1][1] + rect_areas[i][1][1])/4
 
-            if distance_between_centr < min_distance : 
+            if distance_between_centr < min_distance : #collect rect until meed defferent
                 rect.append(rect_areas[i+1])
                 flag_push_to_connect = True
             elif flag_push_to_connect:
@@ -204,60 +198,45 @@ class SearcherBarcode:
         of the bounding the list of the transferred areas.
 
         """
-
-        points = []
+        box = []
         for i,element in enumerate(rect):
-
             height = np.size(self.image,0) 
             width = np.size(self.image,1) 
 
-            dx = element[1][0] / 2
-            dy = element[1][1] / 2
-            lenght = (dx**2 + dy**2)**0.5
+            box.append(cv.boxPoints(element))
 
-            base_x = element[0][0]
-            base_y = element[0][1]
-            base_angle = math.radians(element[2])
-            d_angle = math.tan(dy/dx)
+            for j in range(4):
+                if box[i][j-4][0] > width:
+                    box[i][i-4][0] = width
+                if box[i][j-4][1] > height:
+                    box[i][j-4][1] = height
+                if box[i][j-4][0] < 0:
+                    box[i][j-4][0] = 0                
+                if box[i][j-4][1] < 0:
+                    box[i][j-4][1] = 0
 
-            d_shift1 = round(math.cos(base_angle + d_angle)*lenght)
-            d_shift2 = round(math.sin(base_angle + d_angle)*lenght)
-            d_shift3 = round(math.cos(base_angle - d_angle)*lenght)
-            d_shift4 = round(math.sin(base_angle - d_angle)*lenght)
+        array_points = []
+        for i, contour  in enumerate(box):
+            for j, point in enumerate(contour):
+                array_points.append(tuple(point))
+        box = np.float32(array_points)
+        new_box = cv.minAreaRect(box)
 
-            points.append((base_x + d_shift1, base_y + d_shift2))
-            points.append((base_x - d_shift1, base_y - d_shift2))
-            points.append((base_x + d_shift3, base_y + d_shift4))
-            points.append((base_x - d_shift3, base_y - d_shift4))
+        if new_box[1][1]>new_box[1][0]:
+            new_box = self._swap_width_and_height__(new_box)
 
-            for i in range(4):
-                if points[i-4][0] > width:
-                    points[i-4] = (width, points[i-4][1])
-                if points[i-4][1] > height:
-                    points[i-4] = (points[i-4][0], height)
-                if points[i-4][1] < 0:
-                    points[i-4] = (points[i-4][0], 0)                
-                if points[i-4][1] < 0:
-                    points[i-4] = (points[i-4][0], 0)
-
-        points = np.float32(points)
-        rect = cv.minAreaRect(points)
-
-        if rect[1][1]>rect[1][0]:
-            rect = self._swap_width_and_height__(rect)
-
-        return rect
+        return new_box
 
 
 
     def _create_clusters(self, rotated_rect):
         """  The function receives a list of oriented boxes and forms clusters from them. """
-        sorted_areas = sorted(rotated_rect, key = lambda tup:tup[2])
-        amount_in_ranged_areas = self._get_ranged_area_by_five_degrees_(sorted_areas)
-        clustered_by_angle_area = self._filter_ranged_areas_(amount_in_ranged_areas, sorted_areas)
-        return clustered_by_angle_area
+        sorted_rect = sorted(rotated_rect, key = lambda tup:tup[2])
+        amount_in_ranged_rect = self._get_ranged_rect_by_five_degrees_(sorted_rect)
+        clustered_rect_by_angle = self._filter_ranged_rect_(amount_in_ranged_rect, sorted_rect)
+        return clustered_rect_by_angle
 
-    def _get_ranged_area_by_five_degrees_(self, sorted_areas):
+    def _get_ranged_rect_by_five_degrees_(self, sorted_rect):
         """ 
 
         The function takes a list of oriented boxes sorted by orientation angle,
@@ -272,41 +251,41 @@ class SearcherBarcode:
         count_cluster = -17             
         amount_in_cluster = [0 for clasters in range(36)]
         i = 0
-        while count_cluster < 19 and i < len(sorted_areas):
-            if count_cluster * 5 - 5 <= sorted_areas[i][2] <= count_cluster * 5:
+        while count_cluster < 19 and i < len(sorted_rect):
+            if count_cluster * 5 - 5 <= sorted_rect[i][2] <= count_cluster * 5:
                 amount_in_cluster[count_cluster+17] += 1
                 i += 1
             else:
                 count_cluster += 1
         return amount_in_cluster
 
-    def _filter_ranged_areas_(self, amount_in_ranged_areas, sorted_areas):
+    def _filter_ranged_rect_(self, amount_in_ranged_rect, sorted_rect):
         """ 
 
         The function builds oriented boxes into clusters according to the following criteria:
         According to the data on the number of boxes within the boundaries of 5 degrees, the check is carried out -
         If the number of boxes within the boundaries of 5 degrees is greater than within the adjacent boundaries, and
-        The number of elements within these three boundaries (15 degrees) is greater than self._mount_areas_for_became_barcode () = 8,
+        The number of elements within these three boundaries (15 degrees) is greater than self._mount_rect_for_became_barcode () = 8,
         Then a cluster is formed from them.
 
         """
 
-        clusters_area = []
-        summ_in_out = -amount_in_ranged_areas[-2] - amount_in_ranged_areas[-1]
+        clusters_rect = []
+        summ_in_out = -amount_in_ranged_rect[-2] - amount_in_ranged_rect[-1]
         i=0
         while i<36:
-            summ = amount_in_ranged_areas[i-2] + amount_in_ranged_areas[i-1] + amount_in_ranged_areas[i]
-            if amount_in_ranged_areas[i-2] < amount_in_ranged_areas[i-1] > amount_in_ranged_areas[i] and summ > self._mount_areas_for_became_barcode:
+            summ = amount_in_ranged_rect[i-2] + amount_in_ranged_rect[i-1] + amount_in_ranged_rect[i]
+            if amount_in_ranged_rect[i-2] < amount_in_ranged_rect[i-1] > amount_in_ranged_rect[i] and summ > self._mount_rect_for_became_barcode:
                 cluster = []
                 for j in range(summ):
-                    cluster.append(sorted_areas[summ_in_out + j])
-                clusters_area.append(cluster)
-            summ_in_out += amount_in_ranged_areas[i-2]
+                    cluster.append(sorted_rect[summ_in_out + j])
+                clusters_rect.append(cluster)
+            summ_in_out += amount_in_ranged_rect[i-2]
             i+=1
-        return clusters_area
+        return clusters_rect
 
 
-    def _select_barcode(self, clusters_area):
+    def _select_barcode(self, clusters_rect):
         """ 
 
         The function filters items within raw clusters and returns
@@ -314,20 +293,20 @@ class SearcherBarcode:
 
         """
 
-        barcode_area = []
-        for i, cluster in enumerate(clusters_area):
+        barcode_rect = []
+        for i, cluster in enumerate(clusters_rect):
             candidate_in_barcode = self._get_candidate_in_barcode_(cluster)
             
             for i, cluster in enumerate(candidate_in_barcode):
-                if len(cluster) > self._mount_areas_for_became_barcode:
-                    cluster_contour = self._find_min_area_rect_from_rect_(cluster)
-                    barcode_area.append(cluster_contour)
+                if len(cluster) > self._mount_rect_for_became_barcode:
+                    received_cluster = self._find_min_area_rect_from_rect_(cluster)
+                    barcode_rect.append(received_cluster)
                 candidate_in_barcode = []
 
-        if len(barcode_area) == 0: 
+        if len(barcode_rect) == 0: 
             return None
 
-        return barcode_area
+        return barcode_rect
 
 
     def _get_candidate_in_barcode_(self, sorted_cluster):
@@ -339,7 +318,7 @@ class SearcherBarcode:
         If the distance between elements is less than the threshold level (mean
         Arithmetic value from the heights of all the boxes in the cluster),
         Then the elements are checked out to the processed cluster if the number of primogons
-        In a processed cluster greater than self._mount_areas_for_became_barcode = 8, then
+        In a processed cluster greater than self._mount_rect_for_became_barcode = 8, then
         The cluster is considered to be the area bounding the barcode.
 
         Returns the lists of oriented boxes bounding the barcode.
@@ -378,7 +357,7 @@ class SearcherBarcode:
                     j = i
                     break
             else:
-                if sum(list_flag) < self._mount_areas_for_became_barcode:
+                if sum(list_flag) < self._mount_rect_for_became_barcode:
                     for i in reversed(range(len(sorted_cluster))):
                         if list_flag[i] == 1:
                             sorted_cluster.pop(i)

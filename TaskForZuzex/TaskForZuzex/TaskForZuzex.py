@@ -53,8 +53,8 @@ def load_command_line_arguments():
     if len(sys.argv)==1:
         print_error(
             '''\n There are no arguments:
-            I < picture file path > required;
-            O < picture file path > optional parameter for saving processing results;
+            I < Full path to picture file with format > required;
+            O < Full path to picture file without format format> optional parameter for saving processing results;
             T < 1 > optional parameter, measure execution time for each command block and command as a whole, display the measurement result.
             ''')
 
@@ -82,12 +82,15 @@ def load_command_line_arguments():
     if len(sys.argv)>4:
         print("\nThree arguments loaded, the rest will be ignored.\n")
     
+
+
     return path_load_image, flag_print_runtime, path_save_image
     
 
 
 
 path_load_image, flag_print_runtime, path_save_image = load_command_line_arguments()
+
 image = get_image(path_load_image)
 barcode = SearcherBarcode(image, flag_print_runtime)
 barcode_area = barcode.get_barcode_area()
